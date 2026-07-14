@@ -4,6 +4,10 @@
 [![ROS2](https://img.shields.io/badge/ROS2-Humble-blue.svg)](https://docs.ros.org/en/humble/index.html)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+<p align="center">
+  <img src="demo.gif" alt="AMR Navigation Demo">
+</p>
+
 > **Core hardware interface and base controller for an Autonomous Mobile Robot.** This repository contains the essential scripts, parameters, and bridges required to interface high-level ROS2 navigation nodes with low-level ESP32 motor controllers and LiDAR sensors.
 
 ---
