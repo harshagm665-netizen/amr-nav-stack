@@ -38,7 +38,7 @@ It handles everything from translating `cmd_vel` Twist messages into raw motor P
 ## 🏗️ System Architecture
 
 - **High-Level Compute**: Linux SBC (e.g., Raspberry Pi 5) running ROS 2 Humble. Handles SLAM, Nav2 behavior trees, and the Python-based ROS nodes.
-- **Low-Level Compute**: ESP32 connected via USB (`/dev/ttyUSB1`). Handles motor PID loops, PWM generation, and hardware encoder pulse counting.
+- **Low-Level Compute**: ESP32 connected via USB (`/dev/ttyUSB1`) running custom C++ firmware on FreeRTOS. Handles real-time motor PID control loops (50Hz), PWM generation, and precise hardware encoder pulse counting via PCNT.
 - **Perception**: RPLiDAR for 2D laser scans (`/scan`), used by AMCL for localization and Nav2 for obstacle avoidance.
 - **Kinematics**: Differential drive setup.
   - Track width (Wheel Base): `0.116 m`
@@ -52,6 +52,9 @@ It handles everything from translating `cmd_vel` Twist messages into raw motor P
 
 ### ROS 2 Interface
 - **`kali_base.py` / `kali_base_node.py`**: The heart of the stack. These nodes translate incoming `/cmd_vel` geometry messages into left/right wheel velocities. They also maintain a dedicated background daemon thread to continuously read incoming serial telemetry, calculate Euler-based odometry integration at 20Hz, and broadcast `/odom` and `odom -> base_footprint` TF frames.
+
+### Embedded Firmware
+- **`esp32_firmware.ino`**: Multi-threaded FreeRTOS C++ firmware running on the ESP32. It utilizes ESP32's dedicated PCNT (Pulse Counter) hardware for zero-overhead encoder tracking. A strict 50Hz control loop runs continuously on Core 1 to compute PID outputs, while UART parsing and Watchdog timers ensure the robot stops safely if connection to the ROS 2 host is lost.
 
 ### Navigation & Mapping
 - **`nav2_params.yaml`**: Highly-tuned Nav2 parameters tailored for this specific AMR. Features DWB Local Planner configuration, AMCL particle filter settings (500-2000 particles), dual costmaps (Global & Local) with inflation layers (0.22m radius), and a strict Collision Monitor with a virtual "StopBox" polygon.
@@ -91,6 +94,10 @@ To ensure 100% reliable data transmission between the Linux SBC and the ESP32, a
 3. **Documentation Rendering Issues (GitHub):**
    - *Issue*: The `demo.gif` showcase was 7.5MB, causing GitHub's Camo proxy to frequently timeout and display a broken image link for visitors.
    - *Fix*: Wrote a custom compression script to halve the framerate and reduce the color palette to 64 colors, shrinking the GIF by 85% to 1.0MB and adding explicit `width="700"` tags for robust rendering.
+
+4. **Real-time Motor Control on ESP32:**
+   - *Issue*: Handling high-frequency encoder interrupts on the microcontroller while parsing incoming serial commands and computing PID loops often leads to missed pulses or jittery movement.
+   - *Fix*: Built the ESP32 firmware using a FreeRTOS multi-threaded architecture. Offloaded encoder counting entirely to the ESP32's hardware PCNT peripheral (zero CPU usage). Pinned a strict 50Hz PID control loop to Core 1, and protected shared command variables with FreeRTOS Mutexes (`xSemaphoreTake`), resulting in silky smooth motor operation and rock-solid reliability.
 
 ---
 
