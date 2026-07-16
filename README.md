@@ -8,7 +8,7 @@
 [![Hardware](https://img.shields.io/badge/Hardware-ESP32%20%7C%20Raspberry%20Pi-green.svg)](#-hardware-architecture)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<img src="demo.gif" alt="AMR Navigation Demo" width="700">
+<img src="demo_v2.gif" alt="AMR Navigation Demo" width="700">
 
 *Core hardware interface, robust telemetry threads, and Nav2 configurations for an Autonomous Mobile Robot.*
 
