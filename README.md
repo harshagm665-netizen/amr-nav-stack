@@ -37,14 +37,66 @@ It handles everything from translating `cmd_vel` Twist messages into raw motor P
 
 ## 🏗️ System Architecture
 
-- **High-Level Compute**: Linux SBC (e.g., Raspberry Pi 5) running ROS 2 Humble. Handles SLAM, Nav2 behavior trees, and the Python-based ROS nodes.
-- **Low-Level Compute**: ESP32 connected via USB (`/dev/ttyUSB1`) running custom C++ firmware on FreeRTOS. Handles real-time motor PID control loops (50Hz), PWM generation, and precise hardware encoder pulse counting via PCNT.
-- **Perception**: RPLiDAR for 2D laser scans (`/scan`), used by AMCL for localization and Nav2 for obstacle avoidance.
-- **Kinematics**: Differential drive setup.
-  - Track width (Wheel Base): `0.116 m`
-  - Wheel Radius: `0.0335 m`
-  - Encoder Resolution: `400 ticks/rev`
-  - Max Speed: `0.21 m/s`
+<div align="center">
+<img src="docs/architecture.svg" alt="AMR Navigation Stack — Full System Architecture" width="900">
+<br><br>
+<em>Full system architecture — from physical sensors to Nav2 planning to visualization.<br>
+Click the image to view full resolution.</em>
+</div>
+
+<br>
+
+The diagram above illustrates the end-to-end data flow across **five architectural zones**:
+
+### 🔩 Physical Hardware
+| Component | Role |
+|---|---|
+| **RPLiDAR A1M8** | 360° laser scanner providing `/scan` data in the `laser` frame |
+| **ESP32 Controller** | Real-time PID motor control via FreeRTOS, 8-byte binary protocol over UART |
+| **Wheel Motors** | Dual-motor differential drive with quadrature encoders (400 ticks/rev) |
+
+### 🔌 Hardware Bridge
+| Node | Function |
+|---|---|
+| **`rplidar_ros`** | USB driver node — publishes `/scan` topic |
+| **`kali_base.py`** | Motor & odometry bridge — subscribes to `/cmd_vel`, publishes `/odom` and TF (`odom → base_footprint`) |
+
+### 🧭 Nav2 Stack — SLAM / Localization / Planning / Control
+The Nav2 stack operates in one of two **mutually exclusive modes**:
+
+| Mode | Node | Purpose |
+|---|---|---|
+| **Mode A — Mapping** | `slam_toolbox` | Scan-matching + pose-graph SLAM → publishes `/map` and `tf(map→odom)` |
+| **Mode B — Localization** | `Map Server` + `AMCL` | Loads pre-built map, particle-filter localization → publishes `tf(map→odom)` |
+
+Both modes feed into the **costmap → planner → controller** pipeline:
+
+- **Global Costmap** — Static map layer for long-range planning
+- **Local Costmap** — Rolling window with live obstacle detection
+- **Planner Server** — NavFn global path planner → outputs `/plan`
+- **Controller Server** — DWB local planner → outputs `/cmd_vel_smoothed`
+- **Collision Monitor** — Safety-critical StopBox override using `/scan` + `/cmd_vel_smoothed` → outputs final `/cmd_vel`
+
+### 🌳 TF Tree
+The transform chain `map → odom → base_link → laser` resolves every sensor and actuator into one common reference frame. A broken link anywhere in this chain stalls navigation entirely.
+
+| Transform | Publisher |
+|---|---|
+| `map → odom` | AMCL (Mode B) or slam_toolbox (Mode A) |
+| `odom → base_link` | `kali_base.py` (wheel-encoder odometry) |
+| `base_link → laser` | `robot_state_publisher` (static, from URDF) |
+
+### 📊 Visualization
+**Foxglove Bridge** runs an on-board WebSocket server (`:8765`) streaming all topics to **Foxglove Studio** on an external laptop for real-time monitoring of `/tf`, `/scan`, `/map`, `/odom`, `/cmd_vel`, costmaps, and `/plan`.
+
+### ⚙️ Robot Kinematics
+| Parameter | Value |
+|---|---|
+| Drive type | Differential |
+| Track width (Wheel Base) | `0.116 m` |
+| Wheel Radius | `0.0335 m` |
+| Encoder Resolution | `400 ticks/rev` |
+| Max Speed | `0.21 m/s` |
 
 ---
 
