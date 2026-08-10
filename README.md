@@ -30,44 +30,55 @@ RPLiDAR A1M8 → SLAM Mapping → Nav2 Planning → Motor Control → ESP32 Actu
 ## 🏗️ System Architecture
 
 ```mermaid
-flowchart TD
-    %% Custom Styles for a Professional Aesthetic
-    classDef hardware fill:#1e293b,stroke:#475569,stroke-width:2px,color:#f8fafc,rx:8px,ry:8px;
-    classDef software fill:#0284c7,stroke:#0369a1,stroke-width:2px,color:#f8fafc,rx:8px,ry:8px;
-    classDef rosnode fill:#15803d,stroke:#166534,stroke-width:2px,color:#f8fafc,rx:8px,ry:8px;
-    classDef comms fill:#b45309,stroke:#92400e,stroke-width:2px,color:#f8fafc,rx:8px,ry:8px;
-    
-    %% Core System Graph
-    subgraph RPi ["🚀 Raspberry Pi 5 (ROS 2 Jazzy)"]
+flowchart TB
+    %% Premium ROS2 Styling
+    classDef hardware fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0,rx:4px
+    classDef rosnode fill:#0369a1,stroke:#0284c7,stroke-width:1px,color:#f0f9ff,rx:4px
+    classDef topic fill:#064e3b,stroke:#047857,stroke-width:1px,color:#a7f3d0,rx:16px
+
+    subgraph Pi["🚀 Raspberry Pi 5 (ROS 2 Jazzy)"]
         direction TB
         
-        LIDAR["RPLiDAR A1M8"]:::hardware -.->|/scan| SLAM["SLAM Toolbox"]:::software
+        %% Hardware & Nodes
+        LIDAR["RPLiDAR A1M8"]:::hardware
+        SLAM["SLAM Toolbox"]:::rosnode
+        Nav2["Nav2 Stack<br/>(AMCL, DWB, BT, Costmaps)"]:::rosnode
+        Odom["Kinematics & TF Broadcaster"]:::rosnode
+        Bridge["UART Hardware Bridge"]:::rosnode
         
-        subgraph Nav2 ["🧭 Nav2 Autonomous Stack"]
-            direction TB
-            BT["BT Navigator"]:::software --> NavFn["NavFn Global Planner"]:::software
-            BT --> DWB["DWB Local Controller"]:::software
-            AMCL["AMCL Localization"]:::software
-            Costmap["Layered Costmap2D"]:::software
-        end
+        %% Topics (Pub/Sub Hubs)
+        T_Scan(("/scan")):::topic
+        T_Map(("/map")):::topic
+        T_Odom(("/odom & /tf")):::topic
+        T_Cmd(("/cmd_vel")):::topic
         
-        SLAM -.->|/map| Nav2
-        ODOM["Odometry Publisher<br/>(Euler Integration)"]:::rosnode -.->|/odom & TF| Nav2
+        %% Data Flow
+        LIDAR --> T_Scan
+        T_Scan --> SLAM
+        T_Scan --> Nav2
         
-        Nav2 == /cmd_vel ===> HW["UART Hardware Bridge<br/>(Python struct + XOR checksum)"]:::comms
+        SLAM --> T_Map
+        T_Map --> Nav2
+        
+        Odom --> T_Odom
+        T_Odom --> Nav2
+        
+        Nav2 --> T_Cmd
+        T_Cmd --> Bridge
     end
 
-    subgraph ESP ["⚡ Low-Level Control (ESP32)"]
+    subgraph MCU["⚡ ESP32 Microcontroller (C++)"]
         direction TB
-        MCU["ESP32 Microcontroller"]:::hardware
-        Motors["Motor Drivers & Actuators"]:::hardware
-        Encoders["Differential Encoders"]:::hardware
+        Firmware["Serial Packet Parser<br/>(XOR Checksum)"]:::hardware
+        Motor["L298N / Motor Drivers"]:::hardware
+        Enc["Magnetic Encoders"]:::hardware
+        
+        Firmware --> Motor
+        Enc --> Firmware
     end
 
-    HW <=="115200 Baud UART Packet"==> MCU
-    MCU ==> Motors
-    Encoders -.->|Raw Ticks| MCU
-    MCU -.->|Packed Hex Ticks| ODOM
+    %% Physical Hardware Boundary
+    Bridge <==" UART (115200 bps) "==> Firmware
 ```
 
 ### TF Transform Tree
