@@ -2,7 +2,7 @@
 
 > Full autonomous navigation stack for a differential-drive mobile robot. SLAM mapping, Nav2 path planning, and custom embedded control — running on real hardware.
 
-[![ROS2](https://img.shields.io/badge/ROS2-Humble-22314E?style=flat-square&logo=ros)](https://docs.ros.org/en/humble/)
+[![ROS2](https://img.shields.io/badge/ROS2-Jazzy-22314E?style=flat-square&logo=ros)](https://docs.ros.org/en/jazzy/)
 [![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%205-A22846?style=flat-square&logo=raspberrypi)](https://www.raspberrypi.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)]()
@@ -30,31 +30,44 @@ RPLiDAR A1M8 → SLAM Mapping → Nav2 Planning → Motor Control → ESP32 Actu
 ## 🏗️ System Architecture
 
 ```mermaid
-graph TD
-    subgraph RPi ["Raspberry Pi 5 (ROS 2 Humble)"]
+flowchart TD
+    %% Custom Styles for a Professional Aesthetic
+    classDef hardware fill:#1e293b,stroke:#475569,stroke-width:2px,color:#f8fafc,rx:8px,ry:8px;
+    classDef software fill:#0284c7,stroke:#0369a1,stroke-width:2px,color:#f8fafc,rx:8px,ry:8px;
+    classDef rosnode fill:#15803d,stroke:#166534,stroke-width:2px,color:#f8fafc,rx:8px,ry:8px;
+    classDef comms fill:#b45309,stroke:#92400e,stroke-width:2px,color:#f8fafc,rx:8px,ry:8px;
+    
+    %% Core System Graph
+    subgraph RPi ["🚀 Raspberry Pi 5 (ROS 2 Jazzy)"]
         direction TB
-        LIDAR[RPLiDAR A1M8] --> SLAM[SLAM Toolbox]
-        SLAM --> Nav2[Nav2 Stack]
         
-        subgraph Nav2_Stack ["Nav2 Architecture"]
-            AMCL[AMCL]
-            NavFn[NavFn Planner]
-            DWB[DWB Controller]
-            Costmap[Costmap2D]
-            BT[BT Navigator]
+        LIDAR["RPLiDAR A1M8"]:::hardware -.->|/scan| SLAM["SLAM Toolbox"]:::software
+        
+        subgraph Nav2 ["🧭 Nav2 Autonomous Stack"]
+            direction TB
+            BT["BT Navigator"]:::software --> NavFn["NavFn Global Planner"]:::software
+            BT --> DWB["DWB Local Controller"]:::software
+            AMCL["AMCL Localization"]:::software
+            Costmap["Layered Costmap2D"]:::software
         end
         
-        Odom[Odometry Publisher] --> Nav2
-        Nav2 -- "/cmd_vel" --> HW[Hardware Interface<br/>UART + XOR checksum]
+        SLAM -.->|/map| Nav2
+        ODOM["Odometry Publisher<br/>(Euler Integration)"]:::rosnode -.->|/odom & TF| Nav2
+        
+        Nav2 == /cmd_vel ===> HW["UART Hardware Bridge<br/>(Python struct + XOR checksum)"]:::comms
     end
 
-    subgraph ESP32 ["ESP32 Microcontroller"]
-        Motors[Motor Driver + PWM]
-        Encoders[Encoders]
+    subgraph ESP ["⚡ Low-Level Control (ESP32)"]
+        direction TB
+        MCU["ESP32 Microcontroller"]:::hardware
+        Motors["Motor Drivers & Actuators"]:::hardware
+        Encoders["Differential Encoders"]:::hardware
     end
 
-    HW -- "Velocity Commands" --> Motors
-    Encoders -- "Ticks" --> Odom
+    HW <=="115200 Baud UART Packet"==> MCU
+    MCU ==> Motors
+    Encoders -.->|Raw Ticks| MCU
+    MCU -.->|Packed Hex Ticks| ODOM
 ```
 
 ### TF Transform Tree
@@ -80,7 +93,7 @@ map → odom → base_footprint → base_link → [laser_frame, left_wheel, righ
 
 ### Prerequisites
 - Ubuntu 22.04 (ARM64 for RPi5)
-- ROS2 Humble
+- ROS2 Jazzy
 - Docker (optional)
 
 ### Launch with Docker
