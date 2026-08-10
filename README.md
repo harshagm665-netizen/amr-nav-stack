@@ -29,33 +29,32 @@ RPLiDAR A1M8 → SLAM Mapping → Nav2 Planning → Motor Control → ESP32 Actu
 
 ## 🏗️ System Architecture
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                    Raspberry Pi 5                         │
-│                                                          │
-│  ┌─────────┐    ┌──────────┐    ┌──────────────────┐    │
-│  │ RPLiDAR │───▶│ SLAM     │───▶│ Nav2 Stack       │    │
-│  │ A1M8    │    │ Toolbox  │    │ ┌──────────────┐ │    │
-│  └─────────┘    └──────────┘    │ │ AMCL         │ │    │
-│                                  │ │ NavFn Planner│ │    │
-│  ┌─────────┐    ┌──────────┐    │ │ DWB Controller│ │    │
-│  │ Encoders│───▶│ Odometry │───▶│ │ Costmap2D    │ │    │
-│  │ (ESP32) │    │ Publisher│    │ │ BT Navigator │ │    │
-│  └─────────┘    └──────────┘    │ └──────────────┘ │    │
-│                                  └────────┬─────────┘    │
-│                                           │              │
-│                                    /cmd_vel              │
-│                                           │              │
-│                              ┌────────────▼───────────┐  │
-│                              │ Hardware Interface      │  │
-│                              │ (UART + XOR checksum)   │  │
-│                              └────────────┬────────────┘  │
-└───────────────────────────────────────────┼───────────────┘
-                                            │ UART
-                                ┌───────────▼───────────┐
-                                │       ESP32           │
-                                │  Motor Driver + PWM   │
-                                └───────────────────────┘
+```mermaid
+graph TD
+    subgraph RPi ["Raspberry Pi 5 (ROS 2 Humble)"]
+        direction TB
+        LIDAR[RPLiDAR A1M8] --> SLAM[SLAM Toolbox]
+        SLAM --> Nav2[Nav2 Stack]
+        
+        subgraph Nav2_Stack ["Nav2 Architecture"]
+            AMCL[AMCL]
+            NavFn[NavFn Planner]
+            DWB[DWB Controller]
+            Costmap[Costmap2D]
+            BT[BT Navigator]
+        end
+        
+        Odom[Odometry Publisher] --> Nav2
+        Nav2 -- "/cmd_vel" --> HW[Hardware Interface<br/>UART + XOR checksum]
+    end
+
+    subgraph ESP32 ["ESP32 Microcontroller"]
+        Motors[Motor Driver + PWM]
+        Encoders[Encoders]
+    end
+
+    HW -- "Velocity Commands" --> Motors
+    Encoders -- "Ticks" --> Odom
 ```
 
 ### TF Transform Tree
