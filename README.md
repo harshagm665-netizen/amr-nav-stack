@@ -41,50 +41,36 @@ flowchart TB
 
     %% Cockpit Environment
     subgraph Cockpit ["🖥️ External Cockpit (Laptop / PC)"]
-        direction LR
         Studio["Foxglove Studio"]:::cockpit
     end
 
     %% Raspberry Pi Environment
     subgraph Pi ["🚀 Raspberry Pi 5 — ROS 2 Jazzy Container"]
-        direction TB
         Bridge["foxglove_bridge<br/>(WebSocket relay)"]:::rosnode
-
-        subgraph Navigation ["🗺️ Navigation & Planning"]
-            direction TB
-            MapSrv["Map Server<br/>(monk_room_map.yaml)"]:::rosnode
-            AMCL["AMCL<br/>Localization"]:::rosnode
-            
-            subgraph Costmaps ["🛡️ Costmaps"]
-                GCost["Global Costmap<br/>(static walls)"]:::rosnode
-                LCost["Local Costmap<br/>(live obstacles)"]:::rosnode
-            end
-            
-            Planner["Planner Server<br/>(NavFn · global)"]:::rosnode
-            Ctrl["Controller Server<br/>(DWB · local)"]:::rosnode
-            CollMon["Collision Monitor<br/>(StopBox override)"]:::rosnode
-        end
-
-        subgraph Drivers ["⚙️ Hardware Drivers"]
-            direction LR
-            LidarDrv["rplidar_ros<br/>(LiDAR driver)"]:::rosnode
-            Base["kali_base.py<br/>(motor & odom bridge)"]:::rosnode
-        end
+        
+        MapSrv["Map Server<br/>(monk_room_map.yaml)"]:::rosnode
+        AMCL["AMCL<br/>Localization"]:::rosnode
+        
+        GCost["Global Costmap<br/>(static walls)"]:::rosnode
+        LCost["Local Costmap<br/>(live obstacles)"]:::rosnode
+        
+        Planner["Planner Server<br/>(NavFn · global)"]:::rosnode
+        Ctrl["Controller Server<br/>(DWB · local)"]:::rosnode
+        CollMon["Collision Monitor<br/>(StopBox override)"]:::rosnode
+        
+        Base["kali_base.py<br/>(motor & odom bridge)"]:::rosnode
+        LidarDrv["rplidar_ros<br/>(LiDAR driver)"]:::rosnode
         
         %% Topics as Hubs
-        subgraph Topics ["📡 ROS 2 Topics"]
-            direction LR
-            T_Map(["/map"]):::topic
-            T_Scan(["/scan"]):::topic
-            T_Plan(["/plan"]):::topic
-            T_Smooth(["/cmd_vel_smoothed"]):::topic
-            T_Cmd(["/cmd_vel"]):::topic
-        end
+        T_Map(["/map"]):::topic
+        T_Scan(["/scan"]):::topic
+        T_Plan(["/plan"]):::topic
+        T_Smooth(["/cmd_vel_smoothed"]):::topic
+        T_Cmd(["/cmd_vel"]):::topic
     end
 
     %% Hardware Environment
     subgraph HW ["⚡ Physical Hardware"]
-        direction LR
         RPLIDAR["RPLiDAR A1M8"]:::hardware
         ESP32["ESP32 Controller<br/>(50 Hz PID loop)"]:::hardware
         Motors["Wheel Motors<br/>& Encoders"]:::hardware
@@ -138,10 +124,6 @@ flowchart TB
     style Cockpit fill:#F8FAFC,stroke:#94A3B8,stroke-width:2px,stroke-dasharray: 5 5,color:#0F172A
     style Pi fill:#EFF6FF,stroke:#60A5FA,stroke-width:2px,color:#1E3A8A
     style HW fill:#F1F5F9,stroke:#64748B,stroke-width:2px,color:#0F172A
-    style Navigation fill:#DBEAFE,stroke:#93C5FD,stroke-width:1px,color:#1E3A8A
-    style Costmaps fill:#BFDBFE,stroke:#60A5FA,stroke-width:1px,color:#1E3A8A
-    style Drivers fill:#DBEAFE,stroke:#93C5FD,stroke-width:1px,color:#1E3A8A
-    style Topics fill:#D1FAE5,stroke:#34D399,stroke-width:1px,stroke-dasharray: 4 4,color:#065F46
 ```
 
 ### TF Transform Tree
