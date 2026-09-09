@@ -34,59 +34,86 @@ RPLiDAR A1M8 → SLAM Mapping → Nav2 Planning → Motor Control → ESP32 Actu
 ```mermaid
 flowchart TB
     %% Premium ROS2 Styling
-    classDef hardware fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0,rx:4px
+    classDef external fill:#7c3aed,stroke:#6d28d9,stroke-width:1px,color:#ede9fe,rx:8px
     classDef rosnode fill:#0369a1,stroke:#0284c7,stroke-width:1px,color:#f0f9ff,rx:4px
     classDef topic fill:#064e3b,stroke:#047857,stroke-width:1px,color:#a7f3d0,rx:16px
+    classDef hardware fill:#1e293b,stroke:#475569,stroke-width:1px,color:#e2e8f0,rx:4px
 
-    subgraph Pi["🚀 Raspberry Pi 5 (ROS 2 Jazzy)"]
-        direction TB
-        
-        %% Hardware & Nodes
-        LIDAR["RPLiDAR A1M8"]:::hardware
-        SLAM["SLAM Toolbox"]:::rosnode
-        Nav2["Nav2 Stack<br/>(AMCL, DWB, BT, Costmaps)"]:::rosnode
-        Odom["Kinematics & TF Broadcaster"]:::rosnode
-        Bridge["UART Hardware Bridge"]:::rosnode
-        
-        %% Topics (Pub/Sub Hubs)
-        T_Scan(("/scan")):::topic
-        T_Map(("/map")):::topic
-        T_Odom(("/odom & /tf")):::topic
-        T_Cmd(("/cmd_vel")):::topic
-        
-        %% Data Flow
-        LIDAR --> T_Scan
-        T_Scan --> SLAM
-        T_Scan --> Nav2
-        
-        SLAM --> T_Map
-        T_Map --> Nav2
-        
-        Odom --> T_Odom
-        T_Odom --> Nav2
-        
-        Nav2 --> T_Cmd
-        T_Cmd --> Bridge
+    subgraph Cockpit["🖥️ External Cockpit (Laptop / PC)"]
+        Studio["Foxglove Studio"]:::external
     end
 
-    subgraph MCU["⚡ ESP32 Microcontroller (C++)"]
-        direction TB
-        Firmware["Serial Packet Parser<br/>(XOR Checksum)"]:::hardware
-        Motor["L298N / Motor Drivers"]:::hardware
-        Enc["Magnetic Encoders"]:::hardware
-        
-        Firmware --> Motor
-        Enc --> Firmware
+    subgraph Pi["🚀 Raspberry Pi 5 — ROS 2 Jazzy Container"]
+        Bridge["Foxglove Bridge<br/>(relays all topics over WS)"]:::rosnode
+        MapSrv["Map Server<br/>(monk_room.yaml)"]:::rosnode
+        AMCL["AMCL Localization"]:::rosnode
+        GCost["Global Costmap<br/>(static walls)"]:::rosnode
+        LCost["Local Costmap<br/>(live obstacles)"]:::rosnode
+        Planner["Planner Server<br/>(NavFn · global)"]:::rosnode
+        Ctrl["Controller Server<br/>(DWB · local)"]:::rosnode
+        CollMon["Collision Monitor<br/>(StopBox override)"]:::rosnode
+        Base["kali_base.py<br/>(motor & odom bridge)"]:::rosnode
+        LidarDrv["rplidar_ros Node<br/>(LiDAR driver)"]:::rosnode
     end
 
-    %% Physical Hardware Boundary
-    Bridge <==" UART (115200 bps) "==> Firmware
+    subgraph HW["⚡ Physical Hardware"]
+        RPLIDAR["RPLiDAR A1M8"]:::hardware
+        ESP32["ESP32 Controller<br/>(50 Hz PID loop)"]:::hardware
+        Motors["Wheel Motors<br/>& Encoders"]:::hardware
+    end
+
+    %% Topics (Pub/Sub Hubs)
+    T_Map(("/map")):::topic
+    T_Scan(("/scan")):::topic
+    T_Plan(("/plan")):::topic
+    T_Smooth(("/cmd_vel_smoothed")):::topic
+    T_Cmd(("/cmd_vel")):::topic
+
+    %% External → bridge
+    Studio -->|"ws://"| Bridge
+
+    %% Mapping + localization
+    MapSrv --> T_Map
+    T_Map --> AMCL
+    T_Map --> GCost
+    AMCL -.->|"/tf (map → odom)"| GCost
+    AMCL -.->|"/tf (map → odom)"| LCost
+
+    %% Planning + control
+    GCost --> Planner
+    Planner --> T_Plan
+    T_Plan --> Ctrl
+    LCost --> Ctrl
+    Ctrl --> T_Smooth
+    T_Smooth --> CollMon
+    CollMon --> T_Cmd
+    T_Cmd --> Base
+
+    %% Sensing
+    RPLIDAR -->|"USB"| LidarDrv
+    LidarDrv --> T_Scan
+    T_Scan --> LCost
+    T_Scan --> CollMon
+    T_Scan --> AMCL
+
+    %% Bridge ↔ ESP32 ↔ motors
+    Base -->|"UART cmd"| ESP32
+    ESP32 -->|"encoder telemetry"| Base
+    ESP32 --> Motors
+    Motors -->|"encoders"| ESP32
+
+    %% Odometry feeding localization
+    Base -.->|"/odom + /tf (odom → base_footprint)"| AMCL
 ```
 
 ### TF Transform Tree
 ```
-map → odom → base_footprint → base_link → [laser_frame, left_wheel, right_wheel]
+map → odom → base_footprint → laser
 ```
+
+- `map → odom` — published by **AMCL** (localization corrects drift).
+- `odom → base_footprint` — published by **kali_base.py** from encoder ticks.
+- `base_footprint → laser` — static transform from the LiDAR driver.
 
 ---
 
