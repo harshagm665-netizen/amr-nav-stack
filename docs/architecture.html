@@ -3,548 +3,103 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ROS 2 Navigation Stack — System Architecture</title>
+    <title>ROS 2 Nav2 Architecture</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
     <style>
-        :root {
-            --bg-deep: #06080f;
-            --bg-card: #0c1220;
-            --border: #1a2744;
-            --accent-violet: #8b5cf6;
-            --accent-cyan: #22d3ee;
-            --accent-emerald: #34d399;
-            --text-primary: #e2e8f0;
-            --text-muted: #64748b;
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Inter', sans-serif;
-            background: var(--bg-deep);
-            color: var(--text-primary);
-            min-height: 100vh;
-        }
-
-        /* Atmospheric background */
-        .atmos {
-            position: fixed; inset: 0; z-index: 0; pointer-events: none;
-            background:
-                radial-gradient(ellipse 70% 50% at 20% 10%, rgba(139,92,246,0.06) 0%, transparent 70%),
-                radial-gradient(ellipse 60% 40% at 80% 90%, rgba(6,94,70,0.06) 0%, transparent 70%),
-                radial-gradient(ellipse 50% 50% at 50% 50%, rgba(3,105,161,0.03) 0%, transparent 80%);
-        }
-        .grid-bg {
-            position: fixed; inset: 0; z-index: 0; pointer-events: none;
-            background-image:
-                linear-gradient(rgba(148,163,184,0.025) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(148,163,184,0.025) 1px, transparent 1px);
-            background-size: 48px 48px;
-            mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 80%);
-            -webkit-mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 80%);
-        }
-
-        /* Diagram entrance */
-        .diagram-enter {
-            animation: slideUp 0.6s cubic-bezier(0.16,1,0.3,1) both;
-        }
-        @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .stagger-1 { animation-delay: 0.08s; }
-        .stagger-2 { animation-delay: 0.16s; }
-        .stagger-3 { animation-delay: 0.24s; }
-
-        /* Mermaid overrides */
-        .mermaid-wrap svg { max-width: 100%; height: auto; }
-        .mermaid-wrap { display: flex; justify-content: center; overflow-x: auto; }
-
-        /* Code block */
-        .code-block {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11.5px;
-            line-height: 1.7;
-            color: #a7f3d0;
-            background: #070d1a;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 20px;
-            overflow: auto;
-            white-space: pre;
-            tab-size: 4;
-        }
-
-        /* Legend chips */
-        .legend-chip {
-            display: inline-flex; align-items: center; gap: 8px;
-            padding: 6px 12px; border-radius: 8px;
-            background: rgba(15,23,42,0.6); border: 1px solid var(--border);
-            font-size: 12px; color: #94a3b8; white-space: nowrap;
-        }
-        .legend-dot {
-            width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0;
-        }
-        .legend-dot.topic { border-radius: 50%; }
-
-        /* Buttons */
-        .btn-ghost {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 6px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
-            color: var(--text-muted); background: transparent; border: 1px solid transparent;
-            cursor: pointer; transition: all 0.15s ease;
-        }
-        .btn-ghost:hover { color: #e2e8f0; background: rgba(30,41,59,0.6); border-color: #334155; }
-        .btn-ghost:active { transform: scale(0.97); }
-        .btn-ghost.active { color: #f1f5f9; background: rgba(30,41,59,0.8); border-color: #475569; }
-
-        .btn-primary {
-            display: inline-flex; align-items: center; gap: 6px;
-            padding: 8px 18px; border-radius: 10px; font-size: 13px; font-weight: 600;
-            color: #f8fafc; background: linear-gradient(135deg, #7c3aed, #6d28d9);
-            border: none; cursor: pointer; transition: all 0.15s ease;
-            box-shadow: 0 2px 12px rgba(124,58,237,0.25);
-        }
-        .btn-primary:hover { box-shadow: 0 4px 20px rgba(124,58,237,0.35); transform: translateY(-1px); }
-        .btn-primary:active { transform: scale(0.97) translateY(0); }
-
-        /* Toast */
-        .toast {
-            position: fixed; bottom: 24px; right: 24px; z-index: 100;
-            padding: 10px 18px; border-radius: 10px;
-            background: #1e293b; border: 1px solid #334155;
-            color: #e2e8f0; font-size: 13px; font-weight: 500;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-            animation: toastIn 0.25s cubic-bezier(0.16,1,0.3,1) both;
-        }
-        @keyframes toastIn {
-            from { opacity: 0; transform: translateY(12px) scale(0.95); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
-        /* Flow summary cards */
-        .flow-card {
-            padding: 16px 20px; border-radius: 12px;
-            background: rgba(15,23,42,0.5); border: 1px solid var(--border);
-            transition: border-color 0.2s;
-        }
-        .flow-card:hover { border-color: #334155; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+        body { background-color: #0f172a; font-family: 'Inter', sans-serif; }
+        .mermaid { width: 100%; max-width: 900px; margin: auto; }
     </style>
 </head>
-<body>
-    <div class="atmos"></div>
-    <div class="grid-bg"></div>
+<body class="text-white antialiased">
+    
+    <div class="container mx-auto px-6 py-12">
+        <div class="mb-8 text-center">
+            <h1 class="text-3xl font-bold tracking-tight text-white mb-2">ROS 2 Navigation Stack</h1>
+            <p class="text-slate-400 text-sm font-medium">System Architecture & Data Flow</p>
+        </div>
 
-    <div class="relative z-10 min-h-screen flex flex-col">
-        <!-- Header -->
-        <header class="border-b border-white/[0.04] backdrop-blur-md sticky top-0 z-50 bg-[#06080f]/70">
-            <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-cyan-600 flex items-center justify-center shadow-lg shadow-violet-500/20">
-                        <span class="text-white font-black text-xs">R2</span>
-                    </div>
-                    <div>
-                        <h1 class="text-[15px] font-semibold text-slate-100 leading-tight">ROS 2 Nav Stack</h1>
-                        <p class="text-[11px] text-slate-500 font-medium">Jazzy Jalisco — Kali Robot</p>
-                    </div>
-                </div>
-                <nav class="flex items-center gap-1">
-                    <button id="tabDiagram" onclick="switchTab('diagram')" class="btn-ghost active">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z"/><path d="M4 9h16M9 4v16"/></svg>
-                        Diagram
-                    </button>
-                    <button id="tabSource" onclick="switchTab('source')" class="btn-ghost">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                        Source
-                    </button>
-                </nav>
+        <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-8 shadow-2xl backdrop-blur-sm">
+            <div class="mermaid">
+%%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '14px', 'fontFamily': 'Inter, ui-sans-serif, system-ui, sans-serif'}}}%%
+flowchart TB
+    classDef cockpit fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px,color:#f5f3ff
+    classDef rosnode fill:#1e3a8a,stroke:#3b82f6,stroke-width:1.5px,color:#dbeafe
+    classDef topic fill:#134e4a,stroke:#2dd4bf,stroke-width:2px,color:#ccfbf1
+    classDef hardware fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb
+
+    subgraph Cockpit ["🖥️  External Cockpit "]
+        Studio["Foxglove Studio"]:::cockpit
+    end
+
+    subgraph Pi ["🚀  Raspberry Pi 5 — ROS 2 Jazzy"]
+        Bridge["foxglove_bridge<br/>(WebSocket)"]:::rosnode
+        MapSrv["Map Server<br/>(monk_room_map)"]:::rosnode
+        AMCL["AMCL<br/>Localization"]:::rosnode
+        GCost["Global Costmap<br/>(Static)"]:::rosnode
+        LCost["Local Costmap<br/>(Dynamic)"]:::rosnode
+        Planner["Planner Server<br/>(NavFn)"]:::rosnode
+        Ctrl["Controller Server<br/>(DWB)"]:::rosnode
+        CollMon["Collision Monitor<br/>(StopBox)"]:::rosnode
+        Base["kali_base.py<br/>(Motors & Odom)"]:::rosnode
+        LidarDrv["rplidar_ros<br/>(LiDAR)"]:::rosnode
+        
+        T_Map(["/map"]):::topic
+        T_Scan(["/scan"]):::topic
+        T_Plan(["/plan"]):::topic
+        T_Smooth(["/cmd_vel_smoothed"]):::topic
+        T_Cmd(["/cmd_vel"]):::topic
+    end
+
+    subgraph HW ["⚡  Physical Hardware "]
+        RPLIDAR["RPLiDAR A1M8"]:::hardware
+        ESP32["ESP32<br/>(50 Hz PID)"]:::hardware
+        Motors["Wheel Motors<br/>& Encoders"]:::hardware
+    end
+
+    Studio <-->|"ws://"| Bridge
+    RPLIDAR -->|"USB"| LidarDrv
+    LidarDrv --> T_Scan
+    T_Scan --> AMCL
+    T_Scan --> LCost
+    T_Scan --> CollMon
+
+    MapSrv --> T_Map
+    T_Map --> AMCL
+    T_Map --> GCost
+
+    Base -.->|"/tf: odom → base"| AMCL
+    AMCL -.->|"/tf: map → odom"| GCost
+    AMCL -.->|"/tf: map → odom"| LCost
+
+    GCost --> Planner
+    Planner --> T_Plan
+    T_Plan --> Ctrl
+    
+    LCost --> Ctrl
+    Ctrl --> T_Smooth
+    T_Smooth --> CollMon
+    CollMon --> T_Cmd
+    T_Cmd --> Base
+
+    Base -->|"UART"| ESP32
+    ESP32 -->|"PWM"| Motors
+    Motors -->|"Encoders"| ESP32
+    ESP32 -->|"Odom"| Base
+
+    style Cockpit fill:#1e1b4b,stroke:#4c1d95,stroke-width:2px,color:#c4b5fd
+    style Pi fill:#0f172a,stroke:#1e3a8a,stroke-width:2px,color:#93c5fd
+    style HW fill:#111827,stroke:#374151,stroke-width:2px,color:#9ca3af
             </div>
-        </header>
-
-        <!-- Main Content -->
-        <main class="flex-1 max-w-6xl mx-auto px-6 py-8 w-full">
-
-            <!-- DIAGRAM VIEW -->
-            <div id="diagramView">
-                <!-- Diagram Card -->
-                <div class="diagram-enter bg-[#0c1220]/80 border border-white/[0.05] rounded-2xl p-6 md:p-8 shadow-2xl shadow-black/30 mb-6">
-                    <div class="flex items-start justify-between mb-6">
-                        <div>
-                            <h2 class="text-lg font-bold text-slate-100">Full Stack Architecture</h2>
-                            <p class="text-[13px] text-slate-500 mt-0.5">Cockpit &rarr; Raspberry Pi 5 (Nav2) &rarr; ESP32 &rarr; Motors</p>
-                        </div>
-                        <div class="flex items-center gap-2">
-                            <button onclick="zoomDiagram(1.2)" class="btn-ghost" title="Zoom in">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
-                            </button>
-                            <button onclick="zoomDiagram(0.8)" class="btn-ghost" title="Zoom out">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
-                            </button>
-                            <button onclick="resetZoom()" class="btn-ghost" title="Reset zoom">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 12a9 9 0 109 9M3 12h6m-6 0V9"/></svg>
-                            </button>
-                            <button onclick="downloadSVG()" class="btn-ghost" title="Download SVG">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="diagramWrap" class="mermaid-wrap transition-transform duration-200" style="transform-origin: top center;">
-                        <div id="mermaidDiagram"></div>
-                    </div>
-                </div>
-
-                <!-- Legend -->
-                <div class="diagram-enter stagger-1 flex flex-wrap gap-2 mb-6">
-                    <span class="legend-chip"><span class="legend-dot" style="background:#7c3aed"></span>External Cockpit</span>
-                    <span class="legend-chip"><span class="legend-dot" style="background:#0369a1"></span>ROS 2 Node</span>
-                    <span class="legend-chip"><span class="legend-dot topic" style="background:#065f46"></span>Topic (pub/sub)</span>
-                    <span class="legend-chip"><span class="legend-dot" style="background:#1e293b; border:1px solid #475569"></span>Physical HW</span>
-                    <span class="legend-chip"><span style="width:18px; border-top:2px dashed #f59e0b; flex-shrink:0"></span>TF / Odom</span>
-                </div>
-
-                <!-- Data Flow Summary -->
-                <div class="diagram-enter stagger-2 grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div class="flow-card">
-                        <div class="flex items-center gap-2 mb-2">
-                            <div class="w-2 h-2 rounded-full bg-emerald-400"></div>
-                            <span class="text-xs font-semibold text-emerald-400 uppercase tracking-wider">Sensing</span>
-                        </div>
-                        <p class="text-[12px] text-slate-400 leading-relaxed">
-                            RPLiDAR &rarr; <code class="text-emerald-300 bg-emerald-900/20 px-1 rounded">/scan</code> &rarr; AMCL + Costmaps + Collision Monitor
-                        </p>
-                    </div>
-                    <div class="flow-card">
-                        <div class="flex items-center gap-2 mb-2">
-                            <div class="w-2 h-2 rounded-full bg-violet-400"></div>
-                            <span class="text-xs font-semibold text-violet-400 uppercase tracking-wider">Planning</span>
-                        </div>
-                        <p class="text-[12px] text-slate-400 leading-relaxed">
-                            Global Costmap &rarr; NavFn &rarr; <code class="text-violet-300 bg-violet-900/20 px-1 rounded">/plan</code> &rarr; DWB &rarr; <code class="text-violet-300 bg-violet-900/20 px-1 rounded">/cmd_vel_smoothed</code>
-                        </p>
-                    </div>
-                    <div class="flow-card">
-                        <div class="flex items-center gap-2 mb-2">
-                            <div class="w-2 h-2 rounded-full bg-amber-400"></div>
-                            <span class="text-xs font-semibold text-amber-400 uppercase tracking-wider">Actuation</span>
-                        </div>
-                        <p class="text-[12px] text-slate-400 leading-relaxed">
-                            <code class="text-amber-300 bg-amber-900/20 px-1 rounded">/cmd_vel</code> &rarr; kali_base &rarr; UART &rarr; ESP32 (PID 50 Hz) &rarr; Motors
-                        </p>
-                    </div>
-                </div>
-
-                <!-- TF Chain -->
-                <div class="diagram-enter stagger-3 flow-card">
-                    <div class="flex items-center gap-2 mb-2">
-                        <div class="w-2 h-2 rounded-full bg-cyan-400"></div>
-                        <span class="text-xs font-semibold text-cyan-400 uppercase tracking-wider">Transform Chain</span>
-                    </div>
-                    <p class="text-[12px] text-slate-400 leading-relaxed font-mono">
-                        map
-                        <span class="text-cyan-400">&rarr;</span> odom
-                        <span class="text-slate-600">(AMCL)</span>
-                        <span class="text-cyan-400">&rarr;</span> base_footprint
-                        <span class="text-slate-600">(kali_base)</span>
-                        <span class="text-cyan-400">&rarr;</span> base_link
-                        <span class="text-slate-600">(static)</span>
-                        <span class="text-cyan-400">&rarr;</span> laser_frame
-                        <span class="text-slate-600">(static)</span>
-                    </p>
-                </div>
-            </div>
-
-            <!-- SOURCE VIEW -->
-            <div id="sourceView" class="hidden">
-                <div class="diagram-enter bg-[#0c1220]/80 border border-white/[0.05] rounded-2xl p-6 md:p-8 shadow-2xl shadow-black/30">
-                    <div class="flex items-center justify-between mb-5">
-                        <div>
-                            <h2 class="text-lg font-bold text-slate-100">Mermaid Source</h2>
-                            <p class="text-[13px] text-slate-500 mt-0.5">Copy and paste into any Mermaid-compatible editor</p>
-                        </div>
-                        <button onclick="copySource()" class="btn-primary">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
-                            Copy
-                        </button>
-                    </div>
-                    <div id="codeBlock" class="code-block"></div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Footer -->
-        <footer class="border-t border-white/[0.03] py-4">
-            <div class="max-w-6xl mx-auto px-6 flex items-center justify-between text-[11px] text-slate-600">
-                <span>ROS 2 Jazzy &middot; Nav2 &middot; RPLiDAR A1M8 &middot; ESP32</span>
-                <span>kali_base &middot; Foxglove</span>
-            </div>
-        </footer>
+        </div>
+        
+        <div class="mt-6 flex justify-center gap-6 text-xs text-slate-500">
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-blue-800 border border-blue-500"></span> ROS Node</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-teal-900 border border-teal-400"></span> Topic</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-violet-900 border border-violet-500"></span> External</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-gray-800 border border-gray-500"></span> Hardware</div>
+        </div>
     </div>
 
-    <script>
-        /* ────────────────────────────────────────────────────────
-           Mermaid source — the improved, accurate flowchart
-           ──────────────────────────────────────────────────────── */
-        const mermaidSource = `flowchart TB
-    classDef cockpit fill:#7c3aed,stroke:#5b21b6,stroke-width:2px,color:#f5f3ff
-    classDef rosnode  fill:#0369a1,stroke:#075985,stroke-width:1.5px,color:#e0f2fe
-    classDef topic    fill:#065f46,stroke:#047857,stroke-width:1.5px,color:#ecfdf5
-    classDef hardware fill:#1e293b,stroke:#475569,stroke-width:1.5px,color:#e2e8f0
-
-    subgraph Cockpit["\\u1F5A5\\uFE0F  External Cockpit  (Laptop / PC)"]
-        Studio["Foxglove Studio"]:::cockpit
-    end
-
-    subgraph Pi["\\u1F680  Raspberry Pi 5  \\u2014  ROS 2 Jazzy Container"]
-        Bridge["foxglove_bridge<br/>(WebSocket relay)"]:::rosnode
-        MapSrv["Map Server<br/>(monk_room_map.yaml)"]:::rosnode
-        AMCL["AMCL<br/>Localization"]:::rosnode
-        GCost["Global Costmap<br/>(static walls)"]:::rosnode
-        LCost["Local Costmap<br/>(live obstacles)"]:::rosnode
-        Planner["Planner Server<br/>(NavFn \\u00B7 global)"]:::rosnode
-        Ctrl["Controller Server<br/>(DWB \\u00B7 local)"]:::rosnode
-        CollMon["Collision Monitor<br/>(StopBox override)"]:::rosnode
-        Base["kali_base.py<br/>(motor \\u0026 odom bridge)"]:::rosnode
-        LidarDrv["rplidar_ros<br/>(LiDAR driver)"]:::rosnode
-    end
-
-    subgraph HW["\\u26A1  Physical Hardware"]
-        RPLIDAR["RPLiDAR A1M8"]:::hardware
-        ESP32["ESP32 Controller<br/>(50 Hz PID loop)"]:::hardware
-        Motors["Wheel Motors<br/>& Encoders"]:::hardware
-    end
-
-    T_Map(("/map")):::topic
-    T_Scan(("/scan")):::topic
-    T_Plan(("/plan")):::topic
-    T_Smooth(("/cmd_vel_smoothed")):::topic
-    T_Cmd(("/cmd_vel")):::topic
-
-    Studio <-->|"ws://"| Bridge
-
-    MapSrv --> T_Map
-    T_Map --> AMCL
-    T_Map --> GCost
-
-    RPLIDAR -->|"USB"| LidarDrv
-    LidarDrv --> T_Scan
-    T_Scan --> AMCL
-    T_Scan --> LCost
-    T_Scan --> CollMon
-
-    Base -.->|"/tf  odom \\u2192 base_footprint"| AMCL
-    AMCL -.->|"/tf  map \\u2192 odom"| GCost
-    AMCL -.->|"/tf  map \\u2192 odom"| LCost
-
-    GCost --> Planner
-    Planner --> T_Plan
-    T_Plan --> Ctrl
-    LCost --> Ctrl
-    Ctrl --> T_Smooth
-    T_Smooth --> CollMon
-    CollMon --> T_Cmd
-    T_Cmd --> Base
-
-    Base -->|"UART cmd"| ESP32
-    ESP32 -->|"encoder telemetry"| Base
-    ESP32 --> Motors
-    Motors -->|"encoder ticks"| ESP32`;
-
-        /* For the code display, use the human-readable version */
-        const mermaidDisplay = `flowchart TB
-    classDef cockpit fill:#7c3aed,stroke:#5b21b6,stroke-width:2px,color:#f5f3ff
-    classDef rosnode  fill:#0369a1,stroke:#075985,stroke-width:1.5px,color:#e0f2fe
-    classDef topic    fill:#065f46,stroke:#047857,stroke-width:1.5px,color:#ecfdf5
-    classDef hardware fill:#1e293b,stroke:#475569,stroke-width:1.5px,color:#e2e8f0
-
-    subgraph Cockpit["🖥️  External Cockpit  (Laptop / PC)"]
-        Studio["Foxglove Studio"]:::cockpit
-    end
-
-    subgraph Pi["🚀  Raspberry Pi 5  —  ROS 2 Jazzy Container"]
-        Bridge["foxglove_bridge<br/>(WebSocket relay)"]:::rosnode
-        MapSrv["Map Server<br/>(monk_room_map.yaml)"]:::rosnode
-        AMCL["AMCL<br/>Localization"]:::rosnode
-        GCost["Global Costmap<br/>(static walls)"]:::rosnode
-        LCost["Local Costmap<br/>(live obstacles)"]:::rosnode
-        Planner["Planner Server<br/>(NavFn · global)"]:::rosnode
-        Ctrl["Controller Server<br/>(DWB · local)"]:::rosnode
-        CollMon["Collision Monitor<br/>(StopBox override)"]:::rosnode
-        Base["kali_base.py<br/>(motor & odom bridge)"]:::rosnode
-        LidarDrv["rplidar_ros<br/>(LiDAR driver)"]:::rosnode
-    end
-
-    subgraph HW["⚡  Physical Hardware"]
-        RPLIDAR["RPLiDAR A1M8"]:::hardware
-        ESP32["ESP32 Controller<br/>(50 Hz PID loop)"]:::hardware
-        Motors["Wheel Motors<br/>& Encoders"]:::hardware
-    end
-
-    %% ── ROS 2 Topics (pub/sub hubs) ──────────────────────────
-    T_Map(("/map")):::topic
-    T_Scan(("/scan")):::topic
-    T_Plan(("/plan")):::topic
-    T_Smooth(("/cmd_vel_smoothed")):::topic
-    T_Cmd(("/cmd_vel")):::topic
-
-    %% ── Cockpit ↔ Bridge ─────────────────────────────────────
-    Studio <-->|"ws://"| Bridge
-
-    %% ── Map pipeline ─────────────────────────────────────────
-    MapSrv --> T_Map
-    T_Map --> AMCL
-    T_Map --> GCost
-
-    %% ── Scan pipeline ────────────────────────────────────────
-    RPLIDAR -->|"USB"| LidarDrv
-    LidarDrv --> T_Scan
-    T_Scan --> AMCL
-    T_Scan --> LCost
-    T_Scan --> CollMon
-
-    %% ── TF / Odom (dashed = coordinate transforms) ──────────
-    Base -.->|"/tf  odom → base_footprint"| AMCL
-    AMCL -.->|"/tf  map → odom"| GCost
-    AMCL -.->|"/tf  map → odom"| LCost
-
-    %% ── Planning pipeline ────────────────────────────────────
-    GCost --> Planner
-    Planner --> T_Plan
-    T_Plan --> Ctrl
-
-    %% ── Control pipeline ─────────────────────────────────────
-    LCost --> Ctrl
-    Ctrl --> T_Smooth
-    T_Smooth --> CollMon
-    CollMon --> T_Cmd
-    T_Cmd --> Base
-
-    %% ── Motor / encoder loop ─────────────────────────────────
-    Base -->|"UART cmd"| ESP32
-    ESP32 -->|"encoder telemetry"| Base
-    ESP32 --> Motors
-    Motors -->|"encoder ticks"| ESP32`;
-
-        /* ────────────────────────────────────────────────────────
-           Mermaid init & render
-           ──────────────────────────────────────────────────────── */
-        let currentZoom = 1;
-
-        mermaid.initialize({
-            startOnLoad: false,
-            theme: 'dark',
-            themeVariables: {
-                darkMode: true,
-                background: '#0c1220',
-                primaryColor: '#0369a1',
-                primaryTextColor: '#e0f2fe',
-                primaryBorderColor: '#075985',
-                lineColor: '#475569',
-                secondaryColor: '#065f46',
-                tertiaryColor: '#1e293b',
-                fontFamily: 'Inter, sans-serif',
-                fontSize: '13px',
-                edgeLabelBackground: '#0f172a',
-                clusterBkg: '#0f172a',
-                clusterBorder: '#1e293b',
-                titleColor: '#94a3b8',
-            },
-            flowchart: {
-                curve: 'basis',
-                padding: 24,
-                nodeSpacing: 40,
-                rankSpacing: 60,
-                htmlLabels: true,
-            }
-        });
-
-        async function renderDiagram() {
-            try {
-                const el = document.getElementById('mermaidDiagram');
-                const { svg } = await mermaid.render('ros2graph', mermaidSource);
-                el.innerHTML = svg;
-                /* Apply smooth fade-in to the SVG */
-                const svgEl = el.querySelector('svg');
-                if (svgEl) {
-                    svgEl.style.opacity = '0';
-                    svgEl.style.transition = 'opacity 0.5s ease 0.2s';
-                    requestAnimationFrame(() => { svgEl.style.opacity = '1'; });
-                }
-            } catch (err) {
-                console.error('Mermaid render error:', err);
-                document.getElementById('mermaidDiagram').innerHTML =
-                    '<p style="color:#ef4444;font-size:14px;">Failed to render diagram. See console for details.</p>';
-            }
-        }
-
-        /* ────────────────────────────────────────────────────────
-           UI interactions
-           ──────────────────────────────────────────────────────── */
-        function switchTab(tab) {
-            const dv = document.getElementById('diagramView');
-            const sv = document.getElementById('sourceView');
-            const td = document.getElementById('tabDiagram');
-            const ts = document.getElementById('tabSource');
-            if (tab === 'diagram') {
-                dv.classList.remove('hidden'); sv.classList.add('hidden');
-                td.classList.add('active'); ts.classList.remove('active');
-            } else {
-                dv.classList.add('hidden'); sv.classList.remove('hidden');
-                td.classList.remove('active'); ts.classList.add('active');
-            }
-        }
-
-        function zoomDiagram(factor) {
-            currentZoom = Math.max(0.4, Math.min(3, currentZoom * factor));
-            applyZoom();
-        }
-        function resetZoom() { currentZoom = 1; applyZoom(); }
-        function applyZoom() {
-            document.getElementById('diagramWrap').style.transform = `scale(${currentZoom})`;
-        }
-
-        function downloadSVG() {
-            const svgEl = document.querySelector('#mermaidDiagram svg');
-            if (!svgEl) return;
-            const clone = svgEl.cloneNode(true);
-            clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-            const data = new XMLSerializer().serializeToString(clone);
-            const blob = new Blob([data], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = 'ros2-nav-architecture.svg'; a.click();
-            URL.revokeObjectURL(url);
-            showToast('SVG downloaded');
-        }
-
-        function copySource() {
-            navigator.clipboard.writeText(mermaidDisplay).then(() => showToast('Copied to clipboard'));
-        }
-
-        function showToast(msg) {
-            const existing = document.querySelector('.toast');
-            if (existing) existing.remove();
-            const t = document.createElement('div');
-            t.className = 'toast';
-            t.textContent = msg;
-            document.body.appendChild(t);
-            setTimeout(() => {
-                t.style.opacity = '0'; t.style.transition = 'opacity 0.3s';
-                setTimeout(() => t.remove(), 300);
-            }, 2200);
-        }
-
-        /* ────────────────────────────────────────────────────────
-           Init
-           ──────────────────────────────────────────────────────── */
-        renderDiagram();
-        document.getElementById('codeBlock').textContent = mermaidDisplay;
-    </script>
 </body>
 </html>

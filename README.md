@@ -32,36 +32,43 @@ RPLiDAR A1M8 → SLAM Mapping → Nav2 Planning → Motor Control → ESP32 Actu
 ## 🏗️ System Architecture
 
 ```mermaid
+%%{init: {'theme': 'dark', 'themeVariables': { 'fontSize': '14px', 'fontFamily': 'Inter, ui-sans-serif, system-ui, sans-serif'}}}%%
 flowchart TB
-    %% Styling Definitions
-    classDef cockpit  fill:#6B21A8,stroke:#D8B4FE,stroke-width:2px,color:#FFFFFF,rx:8,ry:8
-    classDef rosnode  fill:#1E40AF,stroke:#93C5FD,stroke-width:2px,color:#FFFFFF,rx:8,ry:8
-    classDef topic    fill:#047857,stroke:#6EE7B7,stroke-width:2px,color:#FFFFFF,rx:15,ry:15
-    classDef hardware fill:#374151,stroke:#9CA3AF,stroke-width:2px,color:#FFFFFF,rx:8,ry:8
+    %% ==========================================
+    %% Premium Class Definitions (Dark Mode)
+    %% ==========================================
+    classDef cockpit fill:#4c1d95,stroke:#8b5cf6,stroke-width:2px,color:#f5f3ff
+    classDef rosnode fill:#1e3a8a,stroke:#3b82f6,stroke-width:1.5px,color:#dbeafe
+    classDef topic fill:#134e4a,stroke:#2dd4bf,stroke-width:2px,color:#ccfbf1
+    classDef hardware fill:#1f2937,stroke:#6b7280,stroke-width:1.5px,color:#e5e7eb
 
-    %% Cockpit Environment
-    subgraph Cockpit ["🖥️ External Cockpit (Laptop / PC)"]
+    %% ==========================================
+    %% Environments
+    %% ==========================================
+    subgraph Cockpit ["🖥️  External Cockpit "]
         Studio["Foxglove Studio"]:::cockpit
     end
 
-    %% Raspberry Pi Environment
-    subgraph Pi ["🚀 Raspberry Pi 5 — ROS 2 Jazzy Container"]
-        Bridge["foxglove_bridge<br/>(WebSocket relay)"]:::rosnode
+    subgraph Pi ["🚀  Raspberry Pi 5 — ROS 2 Jazzy"]
+        %% Comms
+        Bridge["foxglove_bridge<br/>(WebSocket)"]:::rosnode
         
-        MapSrv["Map Server<br/>(monk_room_map.yaml)"]:::rosnode
+        %% Localization
+        MapSrv["Map Server<br/>(monk_room_map)"]:::rosnode
         AMCL["AMCL<br/>Localization"]:::rosnode
         
-        GCost["Global Costmap<br/>(static walls)"]:::rosnode
-        LCost["Local Costmap<br/>(live obstacles)"]:::rosnode
+        %% Navigation
+        GCost["Global Costmap<br/>(Static)"]:::rosnode
+        LCost["Local Costmap<br/>(Dynamic)"]:::rosnode
+        Planner["Planner Server<br/>(NavFn)"]:::rosnode
+        Ctrl["Controller Server<br/>(DWB)"]:::rosnode
+        CollMon["Collision Monitor<br/>(StopBox)"]:::rosnode
         
-        Planner["Planner Server<br/>(NavFn · global)"]:::rosnode
-        Ctrl["Controller Server<br/>(DWB · local)"]:::rosnode
-        CollMon["Collision Monitor<br/>(StopBox override)"]:::rosnode
+        %% Hardware Interface
+        Base["kali_base.py<br/>(Motors & Odom)"]:::rosnode
+        LidarDrv["rplidar_ros<br/>(LiDAR)"]:::rosnode
         
-        Base["kali_base.py<br/>(motor & odom bridge)"]:::rosnode
-        LidarDrv["rplidar_ros<br/>(LiDAR driver)"]:::rosnode
-        
-        %% Topics as Hubs
+        %% Data Bus (Topics)
         T_Map(["/map"]):::topic
         T_Scan(["/scan"]):::topic
         T_Plan(["/plan"]):::topic
@@ -69,61 +76,59 @@ flowchart TB
         T_Cmd(["/cmd_vel"]):::topic
     end
 
-    %% Hardware Environment
-    subgraph HW ["⚡ Physical Hardware"]
+    subgraph HW ["⚡  Physical Hardware "]
         RPLIDAR["RPLiDAR A1M8"]:::hardware
-        ESP32["ESP32 Controller<br/>(50 Hz PID loop)"]:::hardware
+        ESP32["ESP32<br/>(50 Hz PID)"]:::hardware
         Motors["Wheel Motors<br/>& Encoders"]:::hardware
     end
 
     %% ==========================================
-    %% Edge Connections & Pipelines
+    %% Pipelines & Connections
     %% ==========================================
 
-    %% Cockpit ↔ Bridge
+    %% External Link
     Studio <-->|"ws://"| Bridge
 
-    %% Sensor Data Flow
+    %% Sensor Pipeline
     RPLIDAR -->|"USB"| LidarDrv
-    LidarDrv -->|"Publishes"| T_Scan
-    T_Scan -->|"Subscribes"| AMCL
-    T_Scan -->|"Subscribes"| LCost
-    T_Scan -->|"Subscribes"| CollMon
+    LidarDrv --> T_Scan
+    T_Scan --> AMCL
+    T_Scan --> LCost
+    T_Scan --> CollMon
 
     %% Map Pipeline
-    MapSrv -->|"Publishes"| T_Map
-    T_Map -->|"Subscribes"| AMCL
-    T_Map -->|"Subscribes"| GCost
+    MapSrv --> T_Map
+    T_Map --> AMCL
+    T_Map --> GCost
 
-    %% TF / Odom (Coordinate Transforms)
-    Base -.->|"/tf: odom → base_footprint"| AMCL
+    %% TF Tree (Dashed Gold for Coordinate Transforms)
+    Base -.->|"/tf: odom → base"| AMCL
     AMCL -.->|"/tf: map → odom"| GCost
     AMCL -.->|"/tf: map → odom"| LCost
 
-    %% Planning Pipeline
+    %% Planning & Control Pipeline
     GCost --> Planner
-    Planner -->|"Publishes"| T_Plan
-    T_Plan -->|"Subscribes"| Ctrl
-
-    %% Control Pipeline
+    Planner --> T_Plan
+    T_Plan --> Ctrl
+    
     LCost --> Ctrl
-    Ctrl -->|"Publishes"| T_Smooth
-    T_Smooth -->|"Subscribes"| CollMon
-    CollMon -->|"Publishes"| T_Cmd
-    T_Cmd -->|"Subscribes"| Base
+    Ctrl --> T_Smooth
+    T_Smooth --> CollMon
+    CollMon --> T_Cmd
+    T_Cmd --> Base
 
-    %% Motor Control Loop
-    Base -->|"UART Cmd"| ESP32
-    ESP32 -->|"Encoder Telemetry"| Base
-    ESP32 -->|"PWM Signals"| Motors
-    Motors -->|"Encoder Ticks"| ESP32
+    %% Actuation Pipeline
+    Base -->|"UART"| ESP32
+    ESP32 -->|"PWM"| Motors
+    Motors -->|"Encoders"| ESP32
+    ESP32 -->|"Odom"| Base
 
     %% ==========================================
-    %% Subgraph Styling
+    %% Premium Subgraph Styling
     %% ==========================================
-    style Cockpit fill:#F8FAFC,stroke:#94A3B8,stroke-width:2px,stroke-dasharray: 5 5,color:#0F172A
-    style Pi fill:#EFF6FF,stroke:#60A5FA,stroke-width:2px,color:#1E3A8A
-    style HW fill:#F1F5F9,stroke:#64748B,stroke-width:2px,color:#0F172A
+    style Cockpit fill:#1e1b4b,stroke:#4c1d95,stroke-width:2px,color:#c4b5fd
+    style Pi fill:#0f172a,stroke:#1e3a8a,stroke-width:2px,color:#93c5fd
+    style HW fill:#111827,stroke:#374151,stroke-width:2px,color:#9ca3af
 ```
 
 ### TF Transform Tree
