@@ -2,6 +2,8 @@
 
 > Full autonomous navigation stack for a differential-drive mobile robot. SLAM mapping, Nav2 path planning, and custom embedded control — running on real hardware.
 
+![Demo — autonomous navigation](demo_v2.gif)
+
 [![ROS2](https://img.shields.io/badge/ROS2-Jazzy-22314E?style=flat-square&logo=ros)](https://docs.ros.org/en/jazzy/)
 [![Platform](https://img.shields.io/badge/Platform-Raspberry%20Pi%205-A22846?style=flat-square&logo=raspberrypi)](https://www.raspberrypi.com/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
@@ -114,15 +116,17 @@ docker compose up
 
 ### Launch manually
 ```bash
-# Terminal 1: Hardware interface + sensors
-ros2 launch amr_bringup hardware.launch.py
+# One-command bring-up (hardware bridge + Nav2)
+./start_monk.sh path/to/map.yaml
 
-# Terminal 2: SLAM mapping (first run)
-ros2 launch amr_bringup slam.launch.py
+# Or run the pieces separately:
+# Terminal 1: hardware bridge + wheel odometry
+python3 kali_base.py
 
-# Terminal 3: Navigation (after map is saved)
-ros2 launch amr_bringup navigation.launch.py map:=./maps/my_map.yaml
+# Terminal 2: Nav2 (AMCL + navigation) with saved map
+ros2 launch nav2_bringup bringup_launch.py map:=./monk_room_map.yaml params_file:=./nav2_params.yaml
 ```
+> **Note:** the saved map (`monk_room_map.yaml`) is generated on the robot via `slam_toolbox` and is not committed to this repo — re-run SLAM mapping to produce it before navigation.
 
 ---
 
@@ -134,7 +138,7 @@ Diagnosed and resolved a **cascading Nav2 lifecycle bringup failure** affecting 
 3. Incorrect `base_frame` in behavior-server config
 4. Busy-wait loop starving the controller server's executor
 
-Resolution required deep understanding of ROS2 lifecycle node management and the Nav2 managed node activation sequence. Documented the full debugging process in the [wiki](../../wiki).
+Resolution required deep understanding of ROS2 lifecycle node management and the Nav2 managed node activation sequence.
 
 ---
 
@@ -151,16 +155,17 @@ Resolution required deep understanding of ROS2 lifecycle node management and the
 
 ```
 amr-nav-stack/
-├── amr_bringup/          # Launch files and configs
-│   ├── launch/
-│   ├── config/           # Nav2, AMCL, SLAM parameters
-│   └── maps/             # Saved occupancy grid maps
-├── amr_hardware/         # Custom hardware interface
-│   ├── uart_bridge.py    # UART protocol with XOR checksum
-│   └── diff_drive.py     # Odometry computation
-├── amr_description/      # URDF/Xacro robot model
-├── docker/               # Dockerfiles and compose
-└── docs/                 # Architecture diagrams
+├── kali_base.py          # Custom ROS 2 node: /cmd_vel → UART (inverse kinematics),
+│                         #   encoder ticks → /odom + TF (20 Hz odometry)
+├── robot_bridge.py       # Pre-ROS UART test harness (protocol validation)
+├── test_lider.py         # RPLiDAR A1M8 smoke test
+├── nav2_params.yaml      # Full Nav2 config: AMCL, BT navigator, DWB, costmaps,
+│                         #   velocity smoother, collision monitor
+├── start_monk.sh         # One-command bring-up (hardware bridge + Nav2)
+├── firmware/
+│   └── esp32_firmware/   # ESP32 FreeRTOS firmware: 50 Hz PI control + 150 ms watchdog
+├── docs/                 # Architecture diagrams (SVG)
+└── demo_v2.gif           # Demo recording
 ```
 
 ---
